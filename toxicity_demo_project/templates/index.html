@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comment Toxicity Analyzer</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <main class="container">
+        <section class="card">
+            <h1>Comment Toxicity Analyzer</h1>
+            <p class="subtitle">
+                Analyze one text, a manual list of comments, or scan YouTube video comments.
+                Results are reported for all 6 labels.
+            </p>
+
+            <div class="tabs">
+                <button class="tab active" data-tab="single">Single Text</button>
+                <button class="tab" data-tab="batch">Multiple Comments</button>
+                <button class="tab" data-tab="youtube">YouTube Video</button>
+            </div>
+
+            <div id="single-panel" class="panel active">
+                <label for="singleText">Enter text</label>
+                <textarea id="singleText" placeholder="Write a comment here..."></textarea>
+                <button id="singleBtn" class="action-btn">Analyze Text</button>
+                <div id="singleResult" class="result-box hidden"></div>
+            </div>
+
+            <div id="batch-panel" class="panel">
+                <label for="batchComments">Enter comments, one per line</label>
+                <textarea id="batchComments" placeholder="You are amazing&#10;This video is trash&#10;I hate everyone here"></textarea>
+                <button id="batchBtn" class="action-btn">Analyze Comments</button>
+
+                <div id="batchSummary" class="result-box hidden"></div>
+                <div id="batchTableWrap" class="hidden">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Comment</th>
+                                <th>Labels over threshold</th>
+                            </tr>
+                        </thead>
+                        <tbody id="batchTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="youtube-panel" class="panel">
+                <label for="youtubeUrl">YouTube video URL</label>
+                <input id="youtubeUrl" class="text-input" placeholder="https://www.youtube.com/watch?v=..." />
+
+                <label for="youtubeMaxComments" class="top-gap">How many comments to scan</label>
+                <input id="youtubeMaxComments" class="text-input small" type="number" min="1" max="500" value="100" />
+
+                <button id="youtubeBtn" class="action-btn top-gap">Scan YouTube Comments</button>
+
+                <div id="youtubeSummary" class="result-box hidden"></div>
+                <div id="youtubeLabels" class="labels-grid hidden"></div>
+
+                <div id="youtubeTableWrap" class="hidden">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Comment sample</th>
+                                <th>Triggered labels</th>
+                            </tr>
+                        </thead>
+                        <tbody id="youtubeTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        window.ALL_LABELS = {{ labels|tojson|safe }};
+    </script>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

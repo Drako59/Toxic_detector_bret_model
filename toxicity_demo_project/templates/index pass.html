@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comment Toxicity Analyzer</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <main class="container">
+        <section class="card">
+            <h1>Comment Toxicity Analyzer</h1>
+            <p class="subtitle">
+                Check one text or analyze a batch of comments. This UI talks to a Flask backend,
+                which loads your ML model and returns the toxicity result.
+            </p>
+
+            <div class="tabs">
+                <button class="tab active" data-tab="single">Single Text</button>
+                <button class="tab" data-tab="batch">Multiple Comments</button>
+            </div>
+
+            <div id="single-panel" class="panel active">
+                <label for="singleText">Enter text</label>
+                <textarea id="singleText" placeholder="Write a comment here..."></textarea>
+                <button id="singleBtn" class="action-btn">Analyze Text</button>
+                <div id="singleResult" class="result-box hidden"></div>
+            </div>
+
+            <div id="batch-panel" class="panel">
+                <label for="batchComments">Enter comments, one per line</label>
+                <textarea id="batchComments" placeholder="You are amazing&#10;This video is trash&#10;I hate everyone here"></textarea>
+                <button id="batchBtn" class="action-btn">Analyze Comments</button>
+
+                <div id="batchSummary" class="result-box hidden"></div>
+                <div id="batchTableWrap" class="hidden">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Comment</th>
+                                <th>Result</th>
+                            </tr>
+                        </thead>
+                        <tbody id="batchTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
