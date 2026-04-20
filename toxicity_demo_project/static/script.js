@@ -2,7 +2,8 @@ const tabs = document.querySelectorAll(".tab");
 const panels = {
     single: document.getElementById("single-panel"),
     batch: document.getElementById("batch-panel"),
-    youtube: document.getElementById("youtube-panel")
+    youtube: document.getElementById("youtube-panel"),
+    youtubeChannel: document.getElementById("youtubeChannel-panel")
 };
 
 tabs.forEach(tab => {
@@ -19,6 +20,7 @@ tabs.forEach(tab => {
 document.getElementById("singleBtn").addEventListener("click", analyzeSingle);
 document.getElementById("batchBtn").addEventListener("click", analyzeBatch);
 document.getElementById("youtubeBtn").addEventListener("click", analyzeYoutube);
+document.getElementById("youtubeChannelBtn").addEventListener("click", analyzeYoutubeChannel);
 
 async function analyzeSingle() {
     const text = document.getElementById("singleText").value.trim();
@@ -123,6 +125,83 @@ async function analyzeBatch() {
     }
 }
 
+
+async function analyzeYoutubeChannel() {
+    const channelUrl = document.getElementById("youtubeChannelUrl").value.trim();
+    const maxVideos = parseInt(document.getElementById("youtubeMaxVideos").value, 10) || 5;
+    const maxComments = parseInt(document.getElementById("youtubeChannelMaxComments").value, 10) || 100;
+
+    const summary = document.getElementById("youtubeChannelSummary");
+    const labelsWrap = document.getElementById("youtubeChannelLabels");
+    const tableWrap = document.getElementById("youtubeChannelTableWrap");
+    const tableBody = document.getElementById("youtubeChannelTableBody");
+
+    if (!channelUrl) {
+        summary.classList.remove("hidden");
+        summary.innerHTML = "Please enter a YouTube channel link.";
+        labelsWrap.classList.add("hidden");
+        tableWrap.classList.add("hidden");
+        return;
+    }
+
+    summary.classList.remove("hidden");
+    summary.innerHTML = "Fetching latest channel videos, comments, and analyzing them...";
+    labelsWrap.classList.add("hidden");
+    tableWrap.classList.add("hidden");
+    tableBody.innerHTML = "";
+
+    try {
+        const response = await fetch("/analyze-youtube-channel", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({ channelUrl, maxVideos, maxCommentsPerVideo: maxComments })
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+            summary.innerHTML = escapeHtml(data.error || "Something went wrong.");
+            return;
+        }
+
+        summary.innerHTML = `
+            <h3>YouTube Channel Scan Summary</h3>
+            <div class="summary-grid">
+                <div class="metric">Channel<strong>${escapeHtml(data.channel?.title || "Unknown")}</strong></div>
+                <div class="metric">Videos Scanned<strong>${data.videosScanned}</strong></div>
+                <div class="metric">Comments Scanned<strong>${data.totalCommentsScanned}</strong></div>
+                <div class="metric">Overall Toxic %<strong>${data.overallToxicPercent}%</strong></div>
+            </div>
+        `;
+
+        labelsWrap.innerHTML = renderLabelCards(data.labelPercentages, true);
+        labelsWrap.classList.remove("hidden");
+
+        data.videos.forEach((item) => {
+            const sortedLabels = Object.entries(item.labelPercentages || {})
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 3)
+                .filter(([, value]) => value > 0)
+                .map(([label, value]) => `${escapeHtml(label)} (${Number(value).toFixed(1)}%)`)
+                .join(", ");
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+                <td>
+                    <div><strong>${escapeHtml(item.title || "Untitled")}</strong></div>
+                    <div class="muted">${escapeHtml(item.videoId)}</div>
+                </td>
+                <td>${item.totalComments}</td>
+                <td>${item.overallToxicPercent}%</td>
+                <td>${sortedLabels || '<span class="badge safe">None</span>'}</td>
+            `;
+            tableBody.appendChild(tr);
+        });
+
+        tableWrap.classList.remove("hidden");
+    } catch (error) {
+        summary.innerHTML = "Could not connect to backend.";
+    }
+}
+
 async function analyzeYoutube() {
     const videoUrl = document.getElementById("youtubeUrl").value.trim();
     const maxComments = parseInt(document.getElementById("youtubeMaxComments").value, 10) || 100;
@@ -208,6 +287,8 @@ function renderLabelCards(labelMap, asPercentSummary = false) {
         `;
     }).join("");
 }
+
+
 
 function escapeHtml(text) {
     return String(text)

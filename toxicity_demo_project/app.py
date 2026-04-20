@@ -2,14 +2,13 @@ from flask import Flask, render_template, request, jsonify
 import os
 import re
 from urllib.parse import urlparse, parse_qs
-
 import requests
 import torch
 from transformers import BertTokenizer, BertForSequenceClassification
 
 app = Flask(__name__)
 
-MODEL_PATH = "./toxic_bert_model"
+MODEL_PATH = r"C:\Users\maxka\Downloads\toxicity_demo_project\toxicity_demo_project\toxic_bert_model"
 YOUTUBE_API_KEY = "AIzaSyCkKXroQMhWWAdR_b7aFIIwUhdZEJnSvGg"
 
 LABELS = [
@@ -313,6 +312,230 @@ def analyze_youtube():
         "overallToxicPercent": overall_toxic_percent,
         "labelPercentages": label_percentages,
         "results": sample_results
+    })
+
+
+def parse_channel_input(channel_input):
+    value = (channel_input or "").strip()
+    if not value:
+        return None, None, None
+
+    if re.fullmatch(r"UC[A-Za-z0-9_-]{22}", value):
+        return value, None, None
+
+    try:
+        parsed = urlparse(value)
+    except Exception:
+        return None, None, None
+
+    host = (parsed.netloc or "").lower()
+    path = (parsed.path or "").strip("/")
+
+    if "youtube.com" not in host and "youtu.be" not in host:
+        return None, None, None
+
+    if path.startswith("channel/"):
+        parts = path.split("/")
+        if len(parts) > 1:
+            return parts[1], None, None
+
+    if path.startswith("user/"):
+        parts = path.split("/")
+        if len(parts) > 1:
+            return None, parts[1], None
+
+    if path.startswith("@"):
+        return None, None, path[1:]
+
+    return None, None, None
+
+
+def resolve_channel_id(channel_input):
+    direct_channel_id, username, handle = parse_channel_input(channel_input)
+    if direct_channel_id:
+        return direct_channel_id
+
+    if not YOUTUBE_API_KEY:
+        raise ValueError("Missing YOUTUBE_API_KEY environment variable.")
+
+    if username:
+        params = {"part": "id", "forUsername": username, "key": YOUTUBE_API_KEY}
+        response = requests.get("https://www.googleapis.com/youtube/v3/channels", params=params, timeout=25)
+        data = response.json() if response.content else {}
+        if response.status_code != 200:
+            message = data.get("error", {}).get("message", "YouTube API request failed.")
+            raise ValueError(message)
+        items = data.get("items", [])
+        return items[0].get("id") if items else None
+
+    if handle:
+        params = {"part": "id", "forHandle": handle, "key": YOUTUBE_API_KEY}
+        response = requests.get("https://www.googleapis.com/youtube/v3/channels", params=params, timeout=25)
+        data = response.json() if response.content else {}
+        if response.status_code != 200:
+            message = data.get("error", {}).get("message", "YouTube API request failed.")
+            raise ValueError(message)
+        items = data.get("items", [])
+        return items[0].get("id") if items else None
+
+    return None
+
+
+def get_channel_latest_videos(channel_id, max_videos=5):
+    videos = []
+    next_page_token = None
+
+    while len(videos) < max_videos:
+        batch_size = min(50, max_videos - len(videos))
+        params = {
+            "part": "snippet",
+            "channelId": channel_id,
+            "type": "video",
+            "order": "date",
+            "maxResults": batch_size,
+            "key": YOUTUBE_API_KEY
+        }
+        if next_page_token:
+            params["pageToken"] = next_page_token
+
+        response = requests.get("https://www.googleapis.com/youtube/v3/search", params=params, timeout=25)
+        data = response.json() if response.content else {}
+        if response.status_code != 200:
+            message = data.get("error", {}).get("message", "YouTube API request failed.")
+            raise ValueError(message)
+
+        for item in data.get("items", []):
+            video_id = item.get("id", {}).get("videoId")
+            title = item.get("snippet", {}).get("title", "").strip()
+            if video_id:
+                videos.append({"videoId": video_id, "title": title})
+                if len(videos) >= max_videos:
+                    break
+
+        next_page_token = data.get("nextPageToken")
+        if not next_page_token:
+            break
+
+    return videos
+
+def get_channel_metadata(channel_id):
+    params = {
+        "part": "snippet,statistics",
+        "id": channel_id,
+        "key": YOUTUBE_API_KEY
+    }
+    response = requests.get("https://www.googleapis.com/youtube/v3/channels", params=params, timeout=25)
+    data = response.json() if response.content else {}
+    if response.status_code != 200:
+        message = data.get("error", {}).get("message", "YouTube API request failed.")
+        raise ValueError(message)
+    items = data.get("items", [])
+    if not items:
+        return {}
+    channel = items[0]
+    snippet = channel.get("snippet", {})
+    statistics = channel.get("statistics", {})
+    return {
+        "channelId": channel_id,
+        "title": snippet.get("title"),
+        "subscriberCount": int(statistics.get("subscriberCount", 0)),
+        "videoCount": int(statistics.get("videoCount", 0)),
+        "viewCount": int(statistics.get("viewCount", 0)),
+    }
+
+@app.route("/analyze-youtube-channel", methods=["POST"])
+def analyze_youtube_channel():
+    data = request.get_json(force=True)
+    channel_input = (data.get("channelUrl") or "").strip()
+    max_videos = int(data.get("maxVideos", 5))
+    max_comments_per_video = int(data.get("maxCommentsPerVideo", 50))
+
+    if not channel_input:
+        return jsonify({"error": "channelUrl is required"}), 400
+
+    if max_videos < 1 or max_videos > 20:
+        return jsonify({"error": "maxVideos must be between 1 and 20"}), 400
+
+    if max_comments_per_video < 1 or max_comments_per_video > 500:
+        return jsonify({"error": "maxCommentsPerVideo must be between 1 and 500"}), 400
+
+    try:
+        channel_id = resolve_channel_id(channel_input)
+        if not channel_id:
+            return jsonify({"error": "Could not resolve channel ID from the provided input."}), 400
+
+        channel_meta = get_channel_metadata(channel_id)
+        latest_videos = get_channel_latest_videos(channel_id, max_videos=max_videos)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except requests.RequestException:
+        return jsonify({"error": "Could not connect to the YouTube API."}), 502
+
+    if not latest_videos:
+        return jsonify({"error": "No recent videos were found for this channel."}), 404
+
+    channel_comments = []
+    per_video_results = []
+
+    for video in latest_videos:
+        video_url = f"https://www.youtube.com/watch?v={video['videoId']}"
+        try:
+            _, comments = get_youtube_comments(video_url, max_comments=max_comments_per_video)
+        except Exception:
+            comments = []
+
+        if comments:
+            per_comment_scores = model.predict_scores(comments)
+            label_percentages = aggregate_label_percentages(per_comment_scores, threshold=50.0)
+            overall_toxic_percent = round(
+                sum(1 for scores in per_comment_scores if any(v >= 50.0 for v in scores.values())) / len(per_comment_scores) * 100,
+                2
+            )
+            sample_comments = []
+            for comment, scores in zip(comments, per_comment_scores):
+                summary = summarize_scores(scores)
+                sample_comments.append({
+                    "comment": comment,
+                    "overallToxic": summary["overallToxic"],
+                    "activeLabels": summary["activeLabels"],
+                    "labelScores": scores
+                })
+        else:
+            label_percentages = {label: 0.0 for label in LABELS}
+            overall_toxic_percent = 0.0
+            sample_comments = []
+
+        per_video_results.append({
+            "videoId": video["videoId"],
+            "title": video["title"],
+            "totalComments": len(comments),
+            "overallToxicPercent": overall_toxic_percent,
+            "labelPercentages": label_percentages,
+            "results": sample_comments
+        })
+        channel_comments.extend(comments)
+
+    if channel_comments:
+        channel_scores = model.predict_scores(channel_comments)
+        channel_label_percentages = aggregate_label_percentages(channel_scores, threshold=50.0)
+        channel_overall_toxic_percent = round(
+            sum(1 for scores in channel_scores if any(v >= 50.0 for v in scores.values())) / len(channel_scores) * 100,
+            2
+        )
+    else:
+        channel_label_percentages = {label: 0.0 for label in LABELS}
+        channel_overall_toxic_percent = 0.0
+
+    return jsonify({
+        "mode": "youtube_channel",
+        "channel": channel_meta,
+        "videosRequested": max_videos,
+        "commentsRequestedPerVideo": max_comments_per_video,
+        "videosScanned": len(per_video_results),
+        "totalCommentsScanned": len(channel_comments),
+        "overallToxicPercent": channel_overall_toxic_percent,
+        "labelPercentages": channel_label_percentages,
+        "videos": per_video_results
     })
 
 

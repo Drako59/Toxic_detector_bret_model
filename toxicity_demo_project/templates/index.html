@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Comment Toxicity Analyzer</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='20260419') }}">
 </head>
 <body>
     <main class="container">
@@ -19,6 +19,7 @@
                 <button class="tab active" data-tab="single">Single Text</button>
                 <button class="tab" data-tab="batch">Multiple Comments</button>
                 <button class="tab" data-tab="youtube">YouTube Video</button>
+                <button class="tab" data-tab="youtubeChannel">YouTube Channel</button>
             </div>
 
             <div id="single-panel" class="panel active">
@@ -73,12 +74,46 @@
                     </table>
                 </div>
             </div>
+
+            <div id="youtubeChannel-panel" class="panel">
+                <label for="youtubeChannelUrl">YouTube channel link (or channel ID)</label>
+                <input id="youtubeChannelUrl" class="text-input" placeholder="https://www.youtube.com/@channelname or UC..." />
+                <p class="panel-note">This is an additional mode and does not replace single-video scanning.</p>
+
+                <label for="youtubeMaxVideos" class="top-gap">How many latest videos to scan</label>
+                <input id="youtubeMaxVideos" class="text-input small" type="number" min="1" max="20" value="5" />
+
+                <label for="youtubeChannelMaxComments" class="top-gap">How many comments per video to scan</label>
+                <input id="youtubeChannelMaxComments" class="text-input small" type="number" min="1" max="500" value="100" />
+
+                <button id="youtubeChannelBtn" class="action-btn top-gap">Scan Channel Comments</button>
+
+                <div id="youtubeChannelSummary" class="result-box hidden"></div>
+                <div id="youtubeChannelLabels" class="labels-grid hidden"></div>
+
+                <div id="youtubeChannelTableWrap" class="hidden">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Video</th>
+                                <th>Comments Scanned</th>
+                                <th>Overall Toxic %</th>
+                                <th>Top Triggered Labels</th>
+                            </tr>
+                        </thead>
+                        <tbody id="youtubeChannelTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+            
         </section>
+        
+        
     </main>
 
     <script>
         window.ALL_LABELS = {{ labels|tojson|safe }};
     </script>
-    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script src="{{ url_for('static', filename='script.js', v='20260419') }}"></script>
 </body>
 </html>
